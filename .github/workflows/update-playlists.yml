@@ -1,0 +1,43 @@
+name: Update Playlists
+
+on:
+  schedule:
+    - cron: '0 * * * *'     
+  workflow_dispatch:           
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Decrypt script
+        run: |
+          openssl enc -aes-256-cbc -pbkdf2 -d \
+            -in scripts/update_playlists.py.enc \
+            -out scripts/update_playlists.py \
+            -k "${{ secrets.PLAYLIST_PASSWORD }}"
+
+      - name: Run script
+        run: |
+          python3 scripts/update_playlists.py
+
+      - name: Clean up decrypted script
+        if: always()
+        run: rm -f scripts/update_playlists.py
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add playlist.m3u playlist_v2.m3u
+          if git diff --cached --quiet; then
+            echo "No changes detected – nothing to commit."
+          else
+            git commit -m "chore: auto-update playlists [$(date -u '+%Y-%m-%d %H:%M UTC')]"
+            git push
+          fi
